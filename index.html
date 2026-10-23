@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kotak Misteri Wuduk - Permainan Edutainment Pendidikan Islam</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- MediaPipe Hands & Camera Utils CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <style>
+        body {
+            font-family: 'Fredoka', cursive, sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Mirror image for webcam display */
+        .mirror {
+            transform: scaleX(-1);
+        }
+
+        /* Gift Box Hover Pulse */
+        @keyframes pulse-box {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+        }
+
+        .box-hovered {
+            animation: pulse-box 0.6s infinite ease-in-out;
+            box-shadow: 0 0 30px rgba(250, 204, 21, 0.85) !important;
+            border-color: #facc15 !important;
+        }
+
+        /* Particle Canvas Overlay */
+        #particleCanvas {
+            pointer-events: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 40;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen relative flex flex-col justify-between p-4">
+
+    <!-- Canvas Partikel Kesan Kemenangan -->
+    <canvas id="particleCanvas"></canvas>
+
+    <!-- Header / Bar Status Permainan -->
+    <header class="relative z-30 flex justify-between items-center bg-slate-900/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-slate-700/60 shadow-xl">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2.5 rounded-xl shadow-inner">
+                <i class="fa-solid fa-box-open text-2xl text-amber-300"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold tracking-wide bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 bg-clip-text text-transparent">
+                    KOTAK MISTERI WUDUK
+                </h1>
+                <p class="text-xs text-slate-400">Permainan Interaktif Pendidikan Islam</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4 md:space-x-6 text-xs md:text-sm font-semibold">
+            <!-- Soalan Progress -->
+            <div class="bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700/50 flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-indigo-400"></i>
+                <span>Soalan: <span id="questionNum" class="text-amber-400 font-bold">1</span>/10</span>
+            </div>
+            <!-- Masa -->
+            <div class="bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700/50 flex items-center gap-2">
+                <i class="fa-solid fa-stopwatch text-emerald-400"></i>
+                <span>Masa: <span id="timerText" class="text-emerald-400 font-bold">00:00</span></span>
+            </div>
+            <!-- Markah -->
+            <div class="bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700/50 flex items-center gap-2">
+                <i class="fa-solid fa-star text-yellow-400"></i>
+                <span>Skor: <span id="scoreText" class="text-yellow-400 font-bold">0</span></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Viewport (Webcam + Interactive 4 Boxes) -->
+    <main id="gameContainer" class="relative flex-1 my-3 rounded-2xl overflow-hidden border-2 border-slate-700/80 shadow-2xl bg-slate-950 flex flex-col justify-between p-4">
+        
+        <!-- Video Camera Input (Hidden original feed) -->
+        <video id="webcam" class="hidden" playsinline></video>
+
+        <!-- Live Camera Canvas with Hand Overlay -->
+        <canvas id="cameraCanvas" class="absolute inset-0 w-full h-full object-cover mirror z-0"></canvas>
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-slate-950/65 z-0"></div>
+
+        <!-- Soalan Kad Utama (Centered Top) -->
+        <div class="relative z-20 mx-auto max-w-3xl w-full text-center">
+            <div class="bg-slate-900/90 backdrop-blur-md border-2 border-indigo-500/50 p-4 md:p-5 rounded-2xl shadow-2xl transition-all">
+                <span class="text-xs uppercase tracking-widest text-indigo-400 font-semibold mb-1 block">
+                    <i class="fa-solid fa-circle-question mr-1"></i> Soalan Pendidikan Islam (Wuduk)
+                </span>
+                <h2 id="questionText" class="text-lg md:text-2xl font-bold text-white drop-shadow-md">
+                    Memuat turun soalan...
+                </h2>
+            </div>
+        </div>
+
+        <!-- Layout 4 Kotak Hadiah Misteri (2 Kiri, 2 Kanan) -->
+        <div id="boxesContainer" class="relative z-20 grid grid-cols-2 gap-x-8 md:gap-x-24 gap-y-6 my-auto px-4 w-full max-w-5xl mx-auto">
+            <!-- Kolom Kiri (Kotak 0 & Kotak 1) -->
+            <div class="flex flex-col space-y-6 items-start">
+                <!-- Kotak 1 -->
+                <div id="box-0" class="gift-box w-full max-w-sm bg-slate-900/90 backdrop-blur-md border-2 border-amber-500/50 hover:border-amber-400 p-4 rounded-2xl shadow-xl flex items-center space-x-4 transition-all duration-200">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 text-3xl font-bold box-icon shrink-0">
+                        🎁
+                    </div>
+                    <div class="flex-1 text-left min-w-0">
+                        <div class="text-xs text-amber-400/80 font-bold tracking-wider">KOTAK A</div>
+                        <div class="box-val text-base md:text-lg font-bold text-white leading-snug break-words">--</div>
+                    </div>
+                </div>
+
+                <!-- Kotak 2 -->
+                <div id="box-1" class="gift-box w-full max-w-sm bg-slate-900/90 backdrop-blur-md border-2 border-amber-500/50 hover:border-amber-400 p-4 rounded-2xl shadow-xl flex items-center space-x-4 transition-all duration-200">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 text-3xl font-bold box-icon shrink-0">
+                        🎁
+                    </div>
+                    <div class="flex-1 text-left min-w-0">
+                        <div class="text-xs text-amber-400/80 font-bold tracking-wider">KOTAK B</div>
+                        <div class="box-val text-base md:text-lg font-bold text-white leading-snug break-words">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kolom Kanan (Kotak 2 & Kotak 3) -->
+            <div class="flex flex-col space-y-6 items-end">
+                <!-- Kotak 3 -->
+                <div id="box-2" class="gift-box w-full max-w-sm bg-slate-900/90 backdrop-blur-md border-2 border-amber-500/50 hover:border-amber-400 p-4 rounded-2xl shadow-xl flex items-center space-x-4 transition-all duration-200">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 text-3xl font-bold box-icon shrink-0">
+                        🎁
+                    </div>
+                    <div class="flex-1 text-left min-w-0">
+                        <div class="text-xs text-amber-400/80 font-bold tracking-wider">KOTAK C</div>
+                        <div class="box-val text-base md:text-lg font-bold text-white leading-snug break-words">--</div>
+                    </div>
+                </div>
+
+                <!-- Kotak 4 -->
+                <div id="box-3" class="gift-box w-full max-w-sm bg-slate-900/90 backdrop-blur-md border-2 border-amber-500/50 hover:border-amber-400 p-4 rounded-2xl shadow-xl flex items-center space-x-4 transition-all duration-200">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 text-3xl font-bold box-icon shrink-0">
+                        🎁
+                    </div>
+                    <div class="flex-1 text-left min-w-0">
+                        <div class="text-xs text-amber-400/80 font-bold tracking-wider">KOTAK D</div>
+                        <div class="box-val text-base md:text-lg font-bold text-white leading-snug break-words">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indicator Status Kawalan Tangan -->
+        <div class="relative z-20 flex justify-center">
+            <div class="bg-slate-900/80 backdrop-blur-md px-5 py-2 rounded-full border border-slate-700/60 text-xs md:text-sm text-slate-300 flex items-center space-x-2">
+                <span id="handStatusDot" class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+                <span id="handStatusText">Arahkan Jari Telunjuk ke Kamera...</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Visual Pointer Canvas (Penunjuk Jari Custom & Dwell Loader) -->
+    <canvas id="pointerCanvas" class="absolute inset-0 w-full h-full pointer-events-none z-50"></canvas>
+
+    <!-- Overlay Skrin Mula / Panduan -->
+    <div id="startModal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-amber-500/40 p-8 rounded-3xl max-w-xl w-full text-center shadow-2xl space-y-6">
+            <div class="w-20 h-20 bg-amber-500/20 border border-amber-400 rounded-3xl flex items-center justify-center mx-auto text-4xl text-amber-400 shadow-inner">
+                ☝️
+            </div>
+            <div>
+                <h2 class="text-3xl font-extrabold text-white mb-2">Selamat Datang!</h2>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Uji pengetahuan anda tentang <strong class="text-amber-400">Ibadah Wuduk</strong> secara interaktif menggunakan kawalan <strong class="text-amber-400">Jari Telunjuk (*Hand Tracking*)</strong>!
+                </p>
+            </div>
+
+            <div class="bg-slate-800/80 p-4 rounded-2xl text-left text-xs space-y-2 border border-slate-700 text-slate-300">
+                <div class="flex items-start gap-2">
+                    <span class="text-amber-400 font-bold">1.</span>
+                    <span>Pastikan kamera web anda dibenarkan dan posisi jari telunjuk kelihatan di skrin.</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-amber-400 font-bold">2.</span>
+                    <span>Tunjukkan <strong>Jari Telunjuk</strong> ke arah salah satu daripada <strong>4 Kotak Hadiah</strong> jawapan.</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-amber-400 font-bold">3.</span>
+                    <span>Tahan penunjuk jari pada kotak sasaran selama <strong>1 Saat (Dwell)</strong> untuk membukanya!</span>
+                </div>
+            </div>
+
+            <button id="startBtn" onclick="startGame()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-lg rounded-2xl shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-play"></i> MULA PERMAINAN
+            </button>
+        </div>
+    </div>
+
+    <!-- Overlay Skrin Keputusan (End Game) -->
+    <div id="endModal" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border-2 border-emerald-500/50 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl space-y-6">
+            <div class="w-20 h-20 bg-emerald-500/20 border border-emerald-400 rounded-3xl flex items-center justify-center mx-auto text-4xl text-emerald-400 shadow-inner">
+                🏆
+            </div>
+            <div>
+                <h2 class="text-3xl font-extrabold text-white">TAHNIAH!</h2>
+                <p class="text-slate-400 text-sm">Anda telah menjawab semua soalan wuduk!</p>
+            </div>
+
+            <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 space-y-3">
+                <div class="flex justify-between items-center text-sm border-b border-slate-700 pb-2">
+                    <span class="text-slate-400">Masa Diambil:</span>
+                    <span id="finalTime" class="text-emerald-400 font-bold">00:00</span>
+                </div>
+                <div class="flex justify-between items-center text-sm border-b border-slate-700 pb-2">
+                    <span class="text-slate-400">Skor Terkumpul:</span>
+                    <span id="finalScore" class="text-amber-400 font-bold">0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-400">Markah Tertinggi (Highscore):</span>
+                    <span id="highScoreText" class="text-indigo-400 font-bold">0</span>
+                </div>
+            </div>
+
+            <button onclick="restartGame()" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-extrabold text-lg rounded-2xl shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-right"></i> MAIN LAGI
+            </button>
+        </div>
+    </div>
+
+    <!-- Web Audio API Sound Effects Generator -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'hover') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(450, now + 0.08);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.08);
+                osc.start(now);
+                osc.stop(now + 0.08);
+            } else if (type === 'correct') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.35);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.setValueAtTime(180, now + 0.15);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'open') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            }
+        }
+    </script>
+
+    <!-- Game Logic & MediaPipe Integration Script -->
+    <script>
+        // Database Soalan Bertema Wuduk (4 Pilihan Jawapan)
+        const questionsData = [
+            {
+                q: "Apakah tujuan WAJIB berwuduk sebelum menunaikan solat?",
+                options: ["Menyucikan Hadas Kecil", "Menyucikan Hadas Besar", "Menyegarkan Badan", "Mencuci Pakaian"],
+                answer: "Menyucikan Hadas Kecil"
+            },
+            {
+                q: "Berapakah JUMLAH RUKUN WUDUK semuanya?",
+                options: ["6 Rukun", "4 Rukun", "5 Rukun", "8 Rukun"],
+                answer: "6 Rukun"
+            },
+            {
+                q: "Berapakah bilangan kali SUNAT dibasuh bagi setiap anggota wuduk?",
+                options: ["3 Kali", "1 Kali", "2 Kali", "4 Kali"],
+                answer: "3 Kali"
+            },
+            {
+                q: "Apakah RUKUN WUDUK yang pertama?",
+                options: ["Niat Wuduk", "Membasuh Muka", "Membasuh Tangan", "Tertib"],
+                answer: "Niat Wuduk"
+            },
+            {
+                q: "Antara berikut, yang manakah merupakan RUKUN WUDUK ke-3?",
+                options: ["Membasuh Dua Tangan Hingga Siku", "Membasuh Muka", "Membasuh Kaki", "Menyapu Sebahagian Kepala"],
+                answer: "Membasuh Dua Tangan Hingga Siku"
+            },
+            {
+                q: "Apakah rukun wuduk yang TERAKHIR (Rukun ke-6)?",
+                options: ["Tertib (Mengikut Urutan)", "Membasuh Kaki", "Membasuh Telinga", "Niat Wuduk"],
+                answer: "Tertib (Mengikut Urutan)"
+            },
+            {
+                q: "Manakah antara berikut perkara SUNAT dalam berwuduk?",
+                options: ["Berkumur-kumur", "Membasuh Muka", "Niat Wuduk", "Membasuh Kaki"],
+                answer: "Berkumur-kumur"
+            },
+            {
+                q: "Manakah antara berikut BOLEH MEMBATALKAN WUDUK?",
+                options: ["Tidur Nyenyak Tidak Tetap Punggung", "Bercakap-cakap", "Makan Biskut", "Minum Air Suam"],
+                answer: "Tidur Nyenyak Tidak Tetap Punggung"
+            },
+            {
+                q: "Apakah hukum berwuduk menggunakan air mutlak (air bersih)?",
+                options: ["Sah", "Batal", "Harus", "Makruh"],
+                answer: "Sah"
+            },
+            {
+                q: "Apakah anggota wajib dibasuh SELEPAS membasuh dua tangan hingga siku?",
+                options: ["Menyapu Sebahagian Kepala", "Membasuh Kaki", "Membasuh Muka", "Membasuh Telinga"],
+                answer: "Menyapu Sebahagian Kepala"
+            }
+        ];
+
+        // Status Permainan
+        let currentQIndex = 0;
+        let score = 0;
+        let timeElapsed = 0;
+        let timerInterval = null;
+        let isGameActive = false;
+        let currentShuffledOptions = []; // Menyimpan susunan jawapan yang telah dirawakkan
+
+        // Visual Canvas & Penjejakan
+        const videoElement = document.getElementById('webcam');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const cameraCtx = cameraCanvas.getContext('2d');
+        const pointerCanvas = document.getElementById('pointerCanvas');
+        const pointerCtx = pointerCanvas.getContext('2d');
+
+        // Dwell Selector Logic (4 Kotak)
+        let hoveredBoxIndex = null;
+        let dwellStartTime = null;
+        const DWELL_DURATION = 1000; // 1 Saat Dwell
+
+        // Posisi Jari (Smoothed Coordinates)
+        let fingerPos = { x: 0, y: 0 };
+        let smoothedPos = { x: 0, y: 0 };
+
+        // Helper function untuk merawakkan susunan pilihan jawapan
+        function shuffleArray(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // Load Question Function
+        function loadQuestion() {
+            if (currentQIndex >= questionsData.length) {
+                endGame();
+                return;
+            }
+
+            const qData = questionsData[currentQIndex];
+            document.getElementById('questionNum').innerText = currentQIndex + 1;
+            document.getElementById('questionText').innerText = qData.q;
+
+            // Rawakkan susunan 4 pilihan jawapan supaya jawapan betul tidak sentiasa di Kotak A
+            currentShuffledOptions = shuffleArray(qData.options);
+
+            // Reset 4 Boxes Visual
+            for (let i = 0; i < 4; i++) {
+                const boxEl = document.getElementById(`box-${i}`);
+                boxEl.classList.remove('box-hovered', 'bg-emerald-600/90', 'bg-red-600/90', 'border-emerald-400', 'border-red-400');
+                boxEl.classList.add('bg-slate-900/90', 'border-amber-500/50');
+
+                const iconEl = boxEl.querySelector('.box-icon');
+                iconEl.innerText = "🎁";
+
+                const valEl = boxEl.querySelector('.box-val');
+                valEl.innerText = currentShuffledOptions[i] || "";
+            }
+        }
+
+        // Check Position Index Finger inside Box Bounds
+        function checkFingerHover(x, y) {
+            if (!isGameActive) return null;
+
+            for (let i = 0; i < 4; i++) {
+                const boxEl = document.getElementById(`box-${i}`);
+                const rect = boxEl.getBoundingClientRect();
+
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    return i;
+                }
+            }
+            return null;
+        }
+
+        // Process Choice when Dwell Complete (1 Second)
+        function selectBox(index) {
+            if (!isGameActive) return;
+
+            const qData = questionsData[currentQIndex];
+            const selectedAnswer = currentShuffledOptions[index];
+            const boxEl = document.getElementById(`box-${index}`);
+            const iconEl = boxEl.querySelector('.box-icon');
+
+            if (selectedAnswer === qData.answer) {
+                // Betul
+                playSound('correct');
+                playSound('open');
+                score += 100;
+                document.getElementById('scoreText').innerText = score;
+
+                boxEl.classList.add('bg-emerald-600/90', 'border-emerald-400');
+                iconEl.innerText = "🔓";
+
+                // Trigger Particle Fireworks
+                createParticles(fingerPos.x, fingerPos.y);
+
+                isGameActive = false; // Freeze temporary
+                setTimeout(() => {
+                    currentQIndex++;
+                    isGameActive = true;
+                    loadQuestion();
+                }, 1200);
+
+            } else {
+                // Salah
+                playSound('wrong');
+                boxEl.classList.add('bg-red-600/90', 'border-red-400');
+                iconEl.innerText = "❌";
+
+                isGameActive = false;
+                setTimeout(() => {
+                    boxEl.classList.remove('bg-red-600/90', 'border-red-400');
+                    boxEl.classList.add('bg-slate-900/90', 'border-amber-500/50');
+                    iconEl.innerText = "🎁";
+                    isGameActive = true;
+                }, 1000);
+            }
+        }
+
+        // MediaPipe Hands Initialization
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(onHandResults);
+
+        // Process Hand Landmark Tracking
+        function onHandResults(results) {
+            // Draw Video Feed on Canvas
+            cameraCtx.save();
+            cameraCtx.clearRect(0, 0, cameraCanvas.width, cameraCanvas.height);
+            cameraCtx.drawImage(results.image, 0, 0, cameraCanvas.width, cameraCanvas.height);
+            cameraCtx.restore();
+
+            pointerCtx.clearRect(0, 0, pointerCanvas.width, pointerCanvas.height);
+
+            const statusDot = document.getElementById('handStatusDot');
+            const statusText = document.getElementById('handStatusText');
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                statusDot.className = "w-3 h-3 rounded-full bg-emerald-500 animate-pulse";
+                statusText.innerText = "Jari Telunjuk Dikesan!";
+
+                const landmarks = results.multiHandLandmarks[0];
+                // Landmark 8: Index Finger Tip
+                const indexTip = landmarks[8];
+
+                // Coordinate conversion (accounting for horizontal mirror image)
+                const rawX = (1 - indexTip.x) * window.innerWidth;
+                const rawY = indexTip.y * window.innerHeight;
+
+                // Smooth Motion Exponential Filter
+                smoothedPos.x += (rawX - smoothedPos.x) * 0.35;
+                smoothedPos.y += (rawY - smoothedPos.y) * 0.35;
+
+                fingerPos.x = smoothedPos.x;
+                fingerPos.y = smoothedPos.y;
+
+                // Check Box Collision (4 Boxes)
+                const hovered = checkFingerHover(fingerPos.x, fingerPos.y);
+
+                if (hovered !== null) {
+                    if (hoveredBoxIndex !== hovered) {
+                        // Enter new box
+                        if (hoveredBoxIndex !== null) {
+                            document.getElementById(`box-${hoveredBoxIndex}`).classList.remove('box-hovered');
+                        }
+                        hoveredBoxIndex = hovered;
+                        dwellStartTime = Date.now();
+                        playSound('hover');
+                        document.getElementById(`box-${hovered}`).classList.add('box-hovered');
+                    }
+                } else {
+                    if (hoveredBoxIndex !== null) {
+                        document.getElementById(`box-${hoveredBoxIndex}`).classList.remove('box-hovered');
+                    }
+                    hoveredBoxIndex = null;
+                    dwellStartTime = null;
+                }
+
+                // Calculate Progress Dwell
+                let progress = 0;
+                if (hoveredBoxIndex !== null && dwellStartTime) {
+                    const elapsed = Date.now() - dwellStartTime;
+                    progress = Math.min(elapsed / DWELL_DURATION, 1.0);
+
+                    if (progress >= 1.0) {
+                        const target = hoveredBoxIndex;
+                        hoveredBoxIndex = null;
+                        dwellStartTime = null;
+                        selectBox(target);
+                    }
+                }
+
+                // Draw Custom Pointer Cursor and Dwell Progress Ring
+                drawPointerCursor(fingerPos.x, fingerPos.y, progress);
+
+            } else {
+                statusDot.className = "w-3 h-3 rounded-full bg-red-500 animate-ping";
+                statusText.innerText = "Arahkan Jari Telunjuk ke Kamera...";
+
+                if (hoveredBoxIndex !== null) {
+                    document.getElementById(`box-${hoveredBoxIndex}`).classList.remove('box-hovered');
+                    hoveredBoxIndex = null;
+                    dwellStartTime = null;
+                }
+            }
+        }
+
+        // Draw Stylized Pointer on Pointer Canvas
+        function drawPointerCursor(x, y, progress) {
+            pointerCtx.save();
+
+            // Outer Pulsing Glow
+            pointerCtx.beginPath();
+            pointerCtx.arc(x, y, 20, 0, Math.PI * 2);
+            pointerCtx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+            pointerCtx.fill();
+
+            // Inner Pointer Circle
+            pointerCtx.beginPath();
+            pointerCtx.arc(x, y, 9, 0, Math.PI * 2);
+            pointerCtx.fillStyle = '#facc15';
+            pointerCtx.shadowColor = '#facc15';
+            pointerCtx.shadowBlur = 12;
+            pointerCtx.fill();
+
+            // Dwell Loader Ring
+            if (progress > 0) {
+                pointerCtx.beginPath();
+                pointerCtx.arc(x, y, 24, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * progress));
+                pointerCtx.lineWidth = 6;
+                pointerCtx.strokeStyle = '#10b981';
+                pointerCtx.stroke();
+            }
+
+            pointerCtx.restore();
+        }
+
+        // Camera Feed Initialization
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+
+        // Particle Splash Engine
+        let particles = [];
+        function createParticles(x, y) {
+            for (let i = 0; i < 30; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12,
+                    size: Math.random() * 8 + 4,
+                    color: `hsl(${Math.random() * 60 + 40}, 100%, 50%)`,
+                    life: 1.0
+                });
+            }
+        }
+
+        function updateParticles() {
+            const pCanvas = document.getElementById('particleCanvas');
+            const pCtx = pCanvas.getContext('2d');
+            pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.02;
+
+                pCtx.beginPath();
+                pCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                pCtx.fillStyle = p.color;
+                pCtx.globalAlpha = Math.max(p.life, 0);
+                pCtx.fill();
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            requestAnimationFrame(updateParticles);
+        }
+        updateParticles();
+
+        // Game Flow Controller
+        function startGame() {
+            document.getElementById('startModal').classList.add('hidden');
+            camera.start();
+            currentQIndex = 0;
+            score = 0;
+            timeElapsed = 0;
+            isGameActive = true;
+            document.getElementById('scoreText').innerText = score;
+
+            loadQuestion();
+
+            // Start Timer
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (isGameActive) {
+                    timeElapsed++;
+                    const mins = String(Math.floor(timeElapsed / 60)).padStart(2, '0');
+                    const secs = String(timeElapsed % 60).padStart(2, '0');
+                    document.getElementById('timerText').innerText = `${mins}:${secs}`;
+                }
+            }, 1000);
+        }
+
+        function endGame() {
+            isGameActive = false;
+            clearInterval(timerInterval);
+
+            const mins = String(Math.floor(timeElapsed / 60)).padStart(2, '0');
+            const secs = String(timeElapsed % 60).padStart(2, '0');
+            document.getElementById('finalTime').innerText = `${mins}:${secs}`;
+            document.getElementById('finalScore').innerText = score;
+
+            // Save & Fetch Highscore
+            const currentHigh = localStorage.getItem('kotakMisteriWudukHighScore') || 0;
+            if (score > currentHigh) {
+                localStorage.setItem('kotakMisteriWudukHighScore', score);
+                document.getElementById('highScoreText').innerText = score + " (REKOD BARU!)";
+            } else {
+                document.getElementById('highScoreText').innerText = currentHigh;
+            }
+
+            document.getElementById('endModal').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            document.getElementById('endModal').classList.add('hidden');
+            startGame();
+        }
+    </script>
+</body>
+</html>
